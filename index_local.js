@@ -16,6 +16,15 @@ const tmpLikesId = 3;
 const tmpUnlikesId = 4;
 const tmpCommentsId = 5;
 
+//where we will store users that we want to not follow
+const tmpBannedUserId = 6;
+
+//list of people we will never follow
+var listBanned = [];
+
+//how many user ids are we allowed to store in each document
+var bannedUserIdsPerDocument = 30000;
+
 //track if we already commented on a specific media
 const commentDataTableName = "instagram-comment-data";
 
@@ -72,6 +81,9 @@ const tagsPage = 'https://www.instagram.com/explore/tags/%s/?__a=1';
 //how many people are we allowed to follow (max)
 const followingMax = 7500;
 
+//if the difference between following and followers is less than this number, we need to start unfollowing
+const followingThreshold = 100;
+
 //how many followers do we have?
 var followersCount = 0;
 
@@ -88,7 +100,7 @@ const headless = false;
 const accountNameDesc = 'Games By Kevin';
 
 //list of tags where we will "like / comment / follow"
-const tags = ['gamedev', 'gaming', '8bit', 'games', 'android', 'gameart', 'gamer'];
+const tags = ['gamedev', 'retro', 'gaming', '8bit', 'game', 'games', 'android', 'gameart', 'gamer', 'gamers', 'beautiful', 'amazing', 'fun', 'art', 'gaming', 'lol', 'happy'];
 
 //list of names, if a users account contains this name we will ignore them
 const ignore = ['money', 'fortnite', 'free', 'follow', 'raffle', 'pokemon', 'store', 'cash', 'money'];
@@ -103,38 +115,54 @@ var tmpUnfollows = 0;
 //set our 24 hour limits so we don't get banned
 var maxLikes = 250;
 var maxUnlikes = 250;
-var maxComments = 50;
-var maxFollows = 75;
-var maxUnfollows = 75;
+var maxComments = 80;
+var maxFollows = 150;
+var maxUnfollows = 150;
 
-//how many times we do a particular action each time this app runs (like, follow, comment)
-const actionLimit = 7;
+//how many times can we (like, follow, comment) each time this app runs
+const actionLimit = 4;
 
 //list of one word comments
 const commentList1 = [
-	["super", "nice", "great", "amazing", "cool", "beautiful", "awesome", "interesting", "excellent", "admirable", "brilliant", "delightful", "fantastic", "legendary", "solid", "impressive", "stylish", "superb", "flawless", "inspiring", "magical", "astounding", "good", "outstanding", "wow", "congrats", "congratulations", "smashing"],
-	["!","!!","!!!","!!!!","!!!!!"," :)"," :) :)","! :)",""]
+	[
+		"super", "nice", "great", "amazing", "cool", "beautiful", "awesome", "interesting", "excellent", "admirable", 
+		"brilliant", "delightful", "fantastic", "legendary", "solid", "impressive", "stylish", "superb", "flawless", 
+		"inspiring", "magical", "astounding", "good", "outstanding", "wow", "congrats", "congratulations", "smashing", 
+		"epic", "topical", "wonderful", "lit", "slick", "tight"
+	],
+	["", "!","!!","!!!","!!!!","!!!!!"," :)"," :) :)","! :)"]
 ]
 
 //list of two word comments
 const commentList2 = [
-	["nice", "great", "amazing", "cool", "beautiful", "awesome", "interesting", "excellent", "admirable", "brilliant", "delightful", "fantastic", "legendary", "solid", "impressive", "stylish", "superb", "flawless", "inspiring", "magical", "astounding", "good", "outstanding"],
-	["work", "job", "hussle", "picture", "photo", "image", "effort", "post", "addition", "contribution", "performance", "achievement", "creation", "creativity", "vision"],
+	[
+		"nice", "great", "amazing", "cool", "beautiful", "awesome", "interesting", "excellent", "admirable", "brilliant", 
+		"delightful", "fantastic", "legendary", "solid", "impressive", "stylish", "superb", "flawless", "inspiring", "magical", 
+		"astounding", "good", "outstanding", "wonderful"
+	],
+	[
+		"work", "job", "hussle", "picture", "photo", "image", "effort", "post", "addition", "contribution", "performance", 
+		"achievement", "creation", "creativity", "vision", "execution"
+	],
 	["", ".", "..", "...", ". :)", "!", "!!", "!!!", " :)", "! :)"]
 ];
 
 //list of two word comments
 const commentList2_2 = [
 	["so", "very", "really", "that's", "that's very", "that's really"],
-	["nice", "amazing", "cool", "beautiful", "awesome", "interesting", "excellent", "admirable", "brilliant", "delightful", "fantastic", "legendary", "solid", "impressive", "stylish", "superb", "flawless", "inspiring", "magical", "astounding", "good", "outstanding"],
+	[
+		"nice", "amazing", "cool", "beautiful", "awesome", "interesting", "excellent", "admirable", "brilliant", "delightful", 
+		"fantastic", "legendary", "solid", "impressive", "stylish", "superb", "flawless", "inspiring", "magical", "astounding", 
+		"good", "outstanding", "epic", "clean", "fun"
+	],
 	["", ".", "..", "...", ". :)", "!", "!!", "!!!", " :)", "! :)"]
 ];
 
 //list of three word comments
 const commentList3 = [
-	["this", "that", "the photo", "this photo", "that photo"],
+	["this", "that", "it"],
 	["is", "looks", "is really", "really is", "is just", "says", "simply is", "is simply"],
-	["great", "amazing", "magical", "inspiring", "astounding", "good", "cool"],
+	["great", "amazing", "magical", "inspiring", "astounding", "good", "cool", "epic", "slick", "tight", "lit"],
 	["", ".", "..", "...", ". :)", "!", "!!", "!!!", " :)", "! :)"]
 ];
 
@@ -143,18 +171,21 @@ const commentList4 = [
 	["this", "that", "the", "your"],
 	["picture", "photo", "image", "post", "contribution"],
 	["is", "looks", "is just", "is really", "says", "simply is", "is simply"],
-	["great", "amazing", "magical", "inspiring", "astounding", "good", "cool"],
+	["great", "amazing", "magical", "inspiring", "astounding", "good", "cool", "epic", "slick", "tight", "lit"],
 	["", ".", "..", "...", ". :)", "!", "!!", "!!!", " :)", "! :)"]
 ];
 
 //list of random phrases
 const commentListMisc = [
 	[
-		"what a great job", "I like it", "can't wait to see more", "your work looks nice", 
-		"I like what you have done with this picture", "keep up the great work", "you did a great job",
-		"I like your posts"
+		"what a great job", "I like it", "can't wait to see more", "your work looks nice", "you got talent", "you got skill", "this is talent",
+		"I like what you have done with this picture", "keep up the great work", "you did a great job", "your talented",
+		"I like your posts", "you have a lot of talent", "very nice job", "your hard work will pay off", "just radiant", "great job, how did you do it",
+		"I always look forward to these posts", "can't wait for the next one", "hope to see more", "killing it", "killing it right now",
+		"Well accomplished", "Well accomplished mate", "mission accomplished", "this is amazing work", "cool work you have here", "such design",
+		"It's appealing, not just good", "So gorgeous and sublime", "this is some good work"
 	],
-	["!", "!!", "!!!", "! :)", ". :)", " :)"]
+	["", "!", "!!", "!!!", "! :)", ". :)", " :)"]
 ];
 
 //our browser reference object
@@ -282,6 +313,110 @@ async function verifyLogin(page) {
 	return false;
 }
 
+//query the database to load our list of ignored users
+async function loadListBanned() {
+	
+	console.log('loading our ignored users list from database');
+	
+	//reference our db
+	const dbRef = await firestore.collection(metaDataTableName);
+	
+	//start our list as empty
+	listBanned = [];
+	
+	//query the table and return the results in our snapshot
+	var snapshot = await dbRef.where('id', '==', tmpBannedUserId).get();
+	
+	if (snapshot.docs.length < 1) {
+		console.log('there are no ignored users in our list');
+	} else {
+		
+		//check every result to create our list
+		for (var index = 0; index < snapshot.docs.length; index++) {
+			listBanned = listBanned.concat(snapshot.docs[index].data().userIds.split(','));
+		}
+	}
+	
+	console.log(listBanned.length.toLocaleString() + ' ignored user ids loaded')
+}
+
+//update list of ignored user ids in the database
+async function updateBannedDB() {
+	
+	try {
+		
+		//reference our db
+		const dbRef = await firestore.collection(metaDataTableName);
+		
+		//query the table and return the results in our snapshot
+		var snapshot = await dbRef.where('id', '==', tmpBannedUserId).get();
+		
+		console.log('saving new user id data');
+		
+		var userIds = '';
+		
+		//keep track everytime we add a userId
+		var newDataCount = 0;
+		
+		//keep track of existing data
+		var existingDataCount = 0;
+		
+		for (var index = 0; index < listBanned.length; index++) {
+			
+			if (userIds.length > 0)
+				userIds = userIds + ',';
+			
+			userIds = userIds + listBanned[index];
+			
+			//add 1 to the count
+			newDataCount = newDataCount + 1;
+			
+			//if we reached the max allowed or are at the end of our list, save it in the db
+			if (newDataCount >= bannedUserIdsPerDocument || index >= listBanned.length - 1) {
+				
+				//reset the count to 0
+				newDataCount = 0;
+				
+				var result;
+				
+				//if we don't have any existing data or we already updated what's available we will add a new document here
+				if (snapshot.docs.length < 1 || existingDataCount >= snapshot.docs.length) {
+		
+					console.log('saved new user data to a new document');
+		
+					//add data to database
+					result = await dbRef.add({
+						id: tmpBannedUserId, 
+						userIds: userIds
+					});
+					
+				} else {
+									
+					console.log('updated existing document');
+									
+					result = await dbRef.doc(snapshot.docs[existingDataCount].id).update({
+						userIds: userIds
+					});
+					
+					//after update keep track of our existing data in firestore
+					existingDataCount = existingDataCount + 1;
+					
+				}
+				
+				console.log(result);
+				
+				//reset the list to an empty string
+				userIds = '';
+			}
+		}
+		
+	} catch (error) {
+		
+		console.log(error);
+		
+	}
+}
+
 //load our cookie information (if exists)
 async function loadCookies(page) {
 	
@@ -364,6 +499,9 @@ async function saveCookies(cookieData) {
 async function loadMetaData(page) {
 	
 	console.log('loading meta data');
+	
+	//load the banned users list
+	await loadListBanned();
 	
 	//load the profile details
 	const response = await page.goto(util.format(profileJsonPage, username), { timeout: timeout });
@@ -474,33 +612,39 @@ async function trackComment(mediaId) {
 
 async function updateDB(dataId, count) {
 	
-	console.log('dataId: ' + dataId + ', count: ' + count);
-	
-	//reference our db
-	const dbRef = await firestore.collection(metaDataTableName);
-	
-	//query the table and return the results in our snapshot
-	var snapshot = await dbRef.where('id', '==', dataId).get();
-	
-	if (snapshot.docs.length < 1) {
+	try {
 		
-		//if there are no results we will add
-		var result = await dbRef.add({
-			id: dataId, 
-			count: count,
-			timestamp: new Date().getTime()
-		});
+		console.log('dataId: ' + dataId + ', count: ' + count);
 		
-		console.log('Data added to db - ' + dataId);
+		//reference our db
+		const dbRef = await firestore.collection(metaDataTableName);
 		
-	} else {
+		//query the table and return the results in our snapshot
+		var snapshot = await dbRef.where('id', '==', dataId).get();
 		
-		//if exists we will update
-		var result = await dbRef.doc(snapshot.docs[0].id).update({
-			count: count
-		});
+		if (snapshot.docs.length < 1) {
+			
+			//if there are no results we will add
+			var result = await dbRef.add({
+				id: dataId, 
+				count: count,
+				timestamp: new Date().getTime()
+			});
+			
+			console.log('Data added to db - ' + dataId);
+			
+		} else {
+			
+			//if exists we will update
+			var result = await dbRef.doc(snapshot.docs[0].id).update({
+				count: count
+			});
+			
+			console.log('Data updated in db - ' + dataId);
+		}
 		
-		console.log('Data updated in db - ' + dataId);
+	} catch (error) {
+		console.log(error);
 	}
 }
 
@@ -542,6 +686,15 @@ async function changeRelationship(tmpAccountName, page, follow) {
 					return false;
 				}
 			}
+			
+			//lets also make sure the user isn't banned
+			for (var i = 0; i < listBanned.length; i++) {
+				
+				if (tmpAccountName == listBanned[i]) {
+					console.log('This account was marked banned and we wont follow: "' + listBanned[i] + '"');
+					return false;
+				}
+			}
 		}
 		
 	} else {
@@ -553,6 +706,21 @@ async function changeRelationship(tmpAccountName, page, follow) {
 			console.log('we have reached the max # of unfollows for now');
 			return false;
 		}
+		
+		var found = false;
+		
+		//lets add them to the banned list if they aren't already there
+		for (var i = 0; i < listBanned.length; i++) {
+			
+			if (tmpAccountName == listBanned[i]) {
+				found = true;
+				return false;
+			}
+		}
+		
+		//if we didnt find it in our list, lets add it
+		if (!found)
+			listBanned.push(tmpAccountName);		
 	}
 	
 	console.log('opening profile page for "' + tmpAccountName + '"');
@@ -576,9 +744,6 @@ async function changeRelationship(tmpAccountName, page, follow) {
 		//keep track of our recent activity
 		tmpFollows = tmpFollows + 1;
 		
-		//update database
-		await updateDB(tmpFollowsId, tmpFollows);
-		
 		console.log(tmpFollows + ' of ' + maxFollows + ' daily total.');
 		
 		//click button
@@ -596,10 +761,7 @@ async function changeRelationship(tmpAccountName, page, follow) {
 		
 		//keep track of our recent activity
 		tmpUnfollows = tmpUnfollows + 1;
-		
-		//update database
-		await updateDB(tmpUnfollowsId, tmpUnfollows);
-		
+				
 		console.log(tmpUnfollows + ' of ' + maxUnfollows + ' daily total.');
 		
 		//click button
@@ -651,7 +813,6 @@ async function changeMedia(mediaId, page, like) {
 		} else {
 			
 			tmpLikes = tmpLikes + 1;
-			await updateDB(tmpLikesId, tmpLikes);
 			console.log(tmpLikes + ' of ' + maxLikes + ' daily total.');
 			await page.click(unlikeSelector);
 			console.log('liked media: ' + mediaId);
@@ -667,7 +828,6 @@ async function changeMedia(mediaId, page, like) {
 		} else {
 			
 			tmpUnlikes = tmpUnlikes + 1;
-			await updateDB(tmpUnlikesId, tmpUnlikes);
 			console.log(tmpUnlikes + ' of ' + maxUnlikes + ' daily total.');
 			await page.click(likeSelector);
 			console.log('unliked media: ' + mediaId);
@@ -722,7 +882,6 @@ async function comment(mediaId, page, commentText) {
 	
 	//keep track of the number of comments
 	tmpComments = tmpComments + 1;
-	await updateDB(tmpCommentsId, tmpComments);
 	
 	//track comment so we dont comment twice
 	await trackComment(mediaId);
@@ -739,7 +898,7 @@ async function comment(mediaId, page, commentText) {
 async function isFollowingUs(tmpAccountName, page) {
 	
 	//load user profile page
-	const response = await page.goto('https://www.instagram.com/' + tmpAccountName, { timeout: timeout });
+	const response = await page.goto(util.format(profilePage, tmpAccountName), { timeout: timeout });
 	
 	//get source code from page
 	const htmlSource = await response.text();
@@ -777,9 +936,7 @@ async function isFollowingUs(tmpAccountName, page) {
 	
 	//their account has requested to view us (pending)
 	has_requested_viewer = user_info['has_requested_viewer'];
-	*/
 	
-	/*
 	console.log(follows);
 	console.log(follower);
 	console.log(media);
@@ -802,7 +959,7 @@ async function getUsername(mediaId, page) {
 	const text = await (await element.getProperty('textContent')).jsonValue();
 	
 	//wait for page for a short amount of time
-	await page.waitFor(pauseShort);
+	await page.waitFor(pause);
 	
 	//return our username
 	return text;
@@ -906,43 +1063,38 @@ async function runCustomAgent(res) {
 		const jsonObj = JSON.parse(await response.text());
 		
 		//parse our data so we can loop through the posts
-		var posts = followersCount = jsonObj['graphql']['hashtag']['edge_hashtag_to_media']['edges'];
+		var posts = jsonObj['graphql']['hashtag']['edge_hashtag_to_media']['edges'];
 		
 		//how many posts are there in the specific feed
 		console.log(posts.length + ' posts for "' + tag + '" feed');
 		
 		//if we reached our max follow limit we won't follow anyone this time no matter what
-		const canFollow = (followingCount < followingMax);
+		var canFollow = (followingCount < followingMax);
 		
+		//even if we can follow, lets decide at random if we just want to unfollow
+		if (canFollow)
+			canFollow = (Math.random() > .5);
+	
+		//if the number of following / followers are too close, we need to start unfollowing
+		if (Math.abs(followingCount - followersCount) < followingThreshold)
+			canFollow = false;
+	
 		//we can only perform so many actions each time this app runs
-		var actionLike = 0;
-		var actionComment = 0;
-		var actionFollow = 0;
-		var actionUnfollow = 0;
+		var actionsPerformed = 0;
 		
-		//check all recent posts
+		//look at the recent posts
 		for (var index = 0; index < posts.length; index++) {
-			
-			//is this post a video
-			var video;
-			
-			//if we can't possibly do anything more, then exit the loop
-			if (
-				(actionLike >= actionLimit || tmpLikes >= maxLikes) && 
-				(actionComment >= actionLimit || tmpComments >= maxComments) && 
-				(!canFollow || actionFollow >= actionLimit || followingCount >= followingMax || tmpFollows >= maxFollows)
-			) {			
-				console.log('actionLimit: ' + actionLimit);
-				console.log('we have done all that we can for now since we reached our limits');
+						
+			//if we can't possibly do anything more, exit the loop
+			if (actionsPerformed >= actionLimit)
 				break;
-			}
 			
-			//if true flag it as true so our comments say video instead of picture :)
-			if (JSON.stringify(posts[index]['node']['is_video']).toLowerCase().indexOf("true") > -1) {
-				video = true;
-			} else {
-				video = false;
-			}
+			//if we reached our daily limits let's exit
+			if (tmpLikes >= maxLikes && tmpComments >= maxComments && (!canFollow || tmpFollows >= maxFollows || followingCount >= followingMax))
+				break;
+			
+			//is this post a video?
+			var video = (JSON.stringify(posts[index]['node']['is_video']).toLowerCase().indexOf("true") > -1);
 			
 			//what is the media id
 			var mediaId = posts[index]['node']['shortcode'];
@@ -950,7 +1102,7 @@ async function runCustomAgent(res) {
 			//who posted this media?
 			var tmpAccountName = await getUsername(mediaId, page);
 
-			//do we ignore this account
+			//is this an account we should interact with
 			var hasIgnore = false;
 			
 			//lets make sure the account name isnt part of the ignore list
@@ -963,6 +1115,19 @@ async function runCustomAgent(res) {
 					break;
 				}
 			}
+			
+			if (!hasIgnore) {
+				
+				//lets not do anything for a banned user as well
+				for (var i = 0; i < listBanned.length; i++) {
+					
+					if (tmpAccountName == listBanned[i]) {
+						console.log('This account was marked as banned and we will skip: "' + listBanned[i] + '"');
+						hasIgnore = true;
+						break;
+					}
+				}
+			}
 
 			//skip this post if we should ignore the account
 			if (hasIgnore)
@@ -973,40 +1138,23 @@ async function runCustomAgent(res) {
 			
 			try {
 				
-				//attempt to follow this user if we haven't reached our limit
-				if (canFollow && actionFollow < actionLimit) {
-					var resultFollow = await follow(tmpAccountName, page);
-					
-					//if we are successful keep track
-					if (resultFollow)
-						actionFollow = actionFollow + 1;
-				}
+				//follow this user if we are allowed to
+				if (canFollow)
+					await follow(tmpAccountName, page);
 				
 			} catch (error) {
-				
 				console.log(error);
-				
-				//wait for page for a short amount of time
-				await page.waitFor(pauseShort);
+				await page.waitFor(pause);
 			}
 			
 			try {
 				
-				//attempt to like the post if we haven't reached our limit
-				if (actionLike < actionLimit) {
-					var resultLike = await like(mediaId, page);
-					
-					//if we are successful keep track
-					if (resultLike)
-						actionLike = actionLike + 1;
-				}
+				//attempt to like the media
+				await like(mediaId, page);
 				
 			} catch (error) {
-				
 				console.log(error);
-				
-				//wait for page for a short amount of time
-				await page.waitFor(pauseShort);
+				await page.waitFor(pause);
 			}
 			
 			try {
@@ -1014,29 +1162,18 @@ async function runCustomAgent(res) {
 				//attempt to comment on the post if we haven't reached our limit
 				if (tmpAccountName == username) {
 					console.log('We wont comment because it is our post :)');
-				} else {
-					
-					if (actionComment < actionLimit) {
-						var resultComment = await comment(mediaId, page, generateRandomComment(video));
-						
-						//if we are successful keep track
-						if (resultComment)
-							actionComment = actionComment + 1;
-					}
+				} else {					
+					//attempt to comment on the media
+					await comment(mediaId, page, generateRandomComment(video));
 				}
 				
 			} catch (error) {
-				
 				console.log(error);
-				
-				//wait for page for a short amount of time
-				await page.waitFor(pauseShort);
+				await page.waitFor(pause);
 			}
 			
-			//how are we doing so far
-			console.log('actionLike: ' + actionLike);
-			console.log('actionComment: ' + actionComment);
-			console.log('actionFollow: ' + actionFollow);
+			//keep track of how many things we are doing
+			actionsPerformed = actionsPerformed + 1;
 		}
 		
 		//how are we doing so far
@@ -1056,41 +1193,31 @@ async function runCustomAgent(res) {
 			//get the list of users
 			var users = obj['data']['user']['edge_follow']['edges'];
 			
-			//check each user one by one starting at the end
-			for (var index = users.length - 1; index >= 0; index--) {
+			//reset back to 0 for now
+			actionsPerformed = 0;
+			
+			//check random users to see if we can unfollow
+			while (users.length > 0 && actionsPerformed < actionLimit && tmpUnfollows < maxUnfollows) {
 				
-				try {
-					
-					if (actionUnfollow < actionLimit && tmpUnfollows < maxUnfollows) {
-					
-						//get the user name
-						const tmpUsername = users[index]['node']['username'];
-						
-						//is this user following us
-						var follows = await isFollowingUs(tmpUsername, page);
-						
-						//if they aren't following we will unfollow
-						if (!follows) {
-							
-							var resultUnfollow = await unfollow(tmpUsername, page);
-							
-							//if we are successful keep track
-							if (resultUnfollow)
-								actionUnfollow = actionUnfollow + 1;
-						}
-						
-					} else {
-						
-						//if we can't unfollow anymore exit loop
-						break;
-					}
-					
-				} catch (error) {
-					console.log(error);
+				//pick a random index
+				var index = parseInt(Math.random() * users.length);
+			
+				//get the user name
+				const tmpUsername = users[index]['node']['username'];
+				
+				//is this user following us
+				const follows = await isFollowingUs(tmpUsername, page);
+				
+				//if they aren't following we will unfollow
+				if (!follows) {
+					await unfollow(tmpUsername, page);											
+				} else {
+					console.log(tmpUsername + ' is following us and we wont unfollow them');
 				}
 				
-				console.log('actionUnfollow: ' + actionUnfollow);
-			}
+				//keep track of attempts
+				actionsPerformed = actionsPerformed + 1;
+			}			
 		}
 
 		/*
@@ -1104,19 +1231,36 @@ async function runCustomAgent(res) {
 		https://www.instagram.com/graphql/query/?query_id=17874545323001329&id=2223628835&first=50
 		*/
 		
-		//we are successful
-		res.status(200).send('Done');
-		
 	} catch (error) {
+		
 		console.log(error);
-		res.status(500).send(error);
+		
 	} finally {
+		
+		try {
+			
+			//update totals in the database
+			await updateDB(tmpCommentsId, 	tmpComments);
+			await updateDB(tmpLikesId, 		tmpLikes);
+			await updateDB(tmpUnlikesId, 	tmpUnlikes);
+			await updateDB(tmpFollowsId, 	tmpFollows);
+			await updateDB(tmpUnfollowsId, 	tmpUnfollows);
+			
+			//update our list of banned users
+			await updateBannedDB();
+			
+		} catch (error) {
+			console.log(error);
+		}
 		
 		try { 
 			await browser.close(); 
 		} catch (error) { 
 			console.log(error);
 		}
+		
+		if (res != null)
+			res.status(200).send('Done');
 	}
 	
 	console.log('Done');
@@ -1137,7 +1281,7 @@ exports.runAgent = (req, res) => {
 	console.log("Key provided: " + keyId);
 
 	//make sure correct key specified to invoke function
-	if (keyId != null && keyId.length > 5 && keyId == process.env.keyId) {
+	if (keyId != null && keyId.length > 60 && keyId == process.env.keyId) {
 
 		//print valid key id
 		console.log("Key Id valid");
@@ -1153,4 +1297,4 @@ exports.runAgent = (req, res) => {
 	}
 };
 
-runCustomAgent(null);
+//runCustomAgent(null);
